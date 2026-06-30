@@ -1,0 +1,553 @@
+﻿using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using Npgsql;
+using System.Globalization;
+
+namespace Homework
+{
+    public partial class Form1 : Form
+    {
+
+        private readonly string connectionString = "server=localhost;port=5432;UserId=postgres;Password=0000;Database=dbms";
+        public Form1()
+        {
+            InitializeComponent();
+        }
+
+        private void Form1_Load(object sender, EventArgs e)
+        {
+            if (cmbCustomerType != null)
+            {
+                cmbCustomerType.Items.Clear();
+                cmbCustomerType.Items.Add("Normal");
+                cmbCustomerType.Items.Add("Gold");
+                cmbCustomerType.Items.Add("Platinum");
+
+                cmbCustomerType.SelectedIndex = -1;
+
+            }
+        }
+
+        private void LoadFilmsToGrid()
+        {
+            DataTable dt = new DataTable();
+
+            using (NpgsqlConnection conn = new NpgsqlConnection(connectionString))
+            {
+                try
+                {
+                    conn.Open();
+                    string sql = "SELECT film_id, title, rental_rate, rental_duration FROM \"Film\" ORDER BY film_id;";
+
+                    using (NpgsqlDataAdapter da = new NpgsqlDataAdapter(sql, connectionString))
+                    {
+                        da.Fill(dt);
+                    }
+                    dataGridViewFilm.DataSource = dt;
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Film Listeleme Hatası: " + ex.Message);
+                }
+            }
+        }
+
+        private void btnFilmList_Click(object sender, EventArgs e)
+        {
+            LoadFilmsToGrid();
+        }
+
+        private void btnFilmInsert_Click(object sender, EventArgs e)
+        {
+            if (!int.TryParse(txtFilmId.Text, out int filmId) ||
+                !decimal.TryParse(txtRentalRate.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal rentalRate) ||
+                !short.TryParse(txtRentalDuration.Text, out short duration))
+            {
+                MessageBox.Show("Lütfen geçerli sayısal değerler (ID, Ücret, Süre) giriniz.", "Giriş Hatası");
+                return;
+            }
+
+            string title = txtTitle.Text;
+
+            using (NpgsqlConnection conn = new NpgsqlConnection(connectionString))
+                try
+                {
+                    conn.Open();
+                    string sql = "INSERT INTO \"Film\" (film_id, title, rental_rate, rental_duration) VALUES (@id, @title, @rate, @duration)";
+
+                    using (NpgsqlCommand cmd = new NpgsqlCommand(sql, conn))
+                    {
+                        cmd.Parameters.AddWithValue("@id", filmId);
+                        cmd.Parameters.AddWithValue("@title", title);
+                        cmd.Parameters.AddWithValue("@rate", rentalRate);
+                        cmd.Parameters.AddWithValue("@duration", duration);
+
+                        cmd.ExecuteNonQuery();
+                        MessageBox.Show("Film başarıyla eklendi.", "Başarılı");
+                        LoadFilmsToGrid();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Ekleme Hatası: " + ex.Message, "Hata");
+                }
+
+        }
+
+        private void btnFilmUpdate_Click(object sender, EventArgs e)
+        {
+            if (!int.TryParse(txtFilmId.Text, out int filmId) ||
+                !decimal.TryParse(txtRentalRate.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal rentalRate) ||
+                !short.TryParse(txtRentalDuration.Text, out short duration))
+            {
+                MessageBox.Show("Lütfen geçerli sayısal değerler giriniz.", "Giriş Hatası");
+                return;
+            }
+
+            string title = txtTitle.Text;
+
+            using (NpgsqlConnection conn = new NpgsqlConnection(connectionString))
+            {
+                try
+                {
+                    conn.Open();
+                    string sql = "UPDATE \"Film\" SET title = @title, rental_rate = @rate, rental_duration = @duration WHERE film_id = @id";
+
+                    using (NpgsqlCommand cmd = new NpgsqlCommand(sql, conn))
+                    {
+                        cmd.Parameters.AddWithValue("@id", filmId);
+                        cmd.Parameters.AddWithValue("@title", title);
+                        cmd.Parameters.AddWithValue("@rate", rentalRate);
+                        cmd.Parameters.AddWithValue("@duration", duration);
+
+                        int affectedRows = cmd.ExecuteNonQuery();
+
+                        if (affectedRows > 0)
+                        {
+                            MessageBox.Show("Film başarıyla güncellendi.", "Başarılı");
+                            LoadFilmsToGrid();
+                        }
+                        else
+                        {
+                            MessageBox.Show("Güncellenecek film bulunamadı (ID hatalı).", "Uyarı");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Güncelleme Hatası: " + ex.Message, "Hata");
+                }
+            }
+        }
+        private void btnFilmDelete_Click(object sender, EventArgs e)
+        {
+            if (!int.TryParse(txtFilmId.Text, out int filmId))
+            {
+                MessageBox.Show("Lütfen silinecek filmin ID'sini giriniz.", "Giriş Hatası");
+                return;
+            }
+
+            DialogResult result = MessageBox.Show($"Film ID {filmId} silinsin mi? (FK kısıtlamalarına dikkat edin)", "Onay", MessageBoxButtons.YesNo);
+
+            if (result == DialogResult.Yes)
+            {
+                using (NpgsqlConnection conn = new NpgsqlConnection(connectionString))
+                {
+                    try
+                    {
+                        conn.Open();
+                        string sql = "DELETE FROM \"Film\" WHERE film_id = @id";
+
+                        using (NpgsqlCommand cmd = new NpgsqlCommand(sql, conn))
+                        {
+                            cmd.Parameters.AddWithValue("@id", filmId);
+
+                            int affectedRows = cmd.ExecuteNonQuery();
+
+                            if (affectedRows > 0)
+                            {
+                                MessageBox.Show("Film başarıyla silindi.", "Başarılı");
+                                LoadFilmsToGrid();
+                            }
+                            else
+                            {
+                                MessageBox.Show("Silinecek film bulunamadı.", "Uyarı");
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show("Silme Hatası: Film başka tablolarda kullanılıyor olabilir. Detay: " + ex.Message, "Hata");
+                    }
+                }
+            }
+        }
+        private void LoadCustomersToGrid()
+        {
+            DataTable dt = new DataTable();
+
+            using (NpgsqlConnection conn = new NpgsqlConnection(connectionString))
+            {
+                try
+                {
+                    conn.Open();
+                    string sql = @"
+                        SELECT
+                            customer_id,
+                            full_name,
+                            store_id,
+                            customer_type 
+                        FROM ""Customer"" 
+                        ORDER BY customer_id;
+                    ";
+
+                    using (NpgsqlDataAdapter da = new NpgsqlDataAdapter(sql, conn))
+                    {
+                        da.Fill(dt);
+                    }
+                    dataGridViewCustomer.DataSource = dt;
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Müşteri Listeleme Hatası: " + ex.Message, "Hata");
+                }
+            }
+        }
+        private void btnCustomerList_Click(object sender, EventArgs e)
+        {
+            LoadCustomersToGrid();
+        }
+
+        private void btnCustomerInsert_Click(object sender, EventArgs e)
+        {
+            if (cmbCustomerType == null || cmbCustomerType.SelectedItem == null)
+            {
+                MessageBox.Show("Lütfen müşteri tipini seçiniz.", "Giriş Hatası");
+                return;
+            }
+
+            if (!int.TryParse(txtCustomerId.Text, out int customerId) ||
+                !short.TryParse(txtCustomerStoreId.Text, out short storeId) ||
+                string.IsNullOrWhiteSpace(txtCustomerName.Text))
+            {
+                MessageBox.Show("Lütfen tüm zorunlu alanları geçerli giriniz.", "Giriş Hatası");
+                return;
+            }
+
+            string fullName = txtCustomerName.Text;
+            string customerType = cmbCustomerType.SelectedItem.ToString();
+
+            using (NpgsqlConnection conn = new NpgsqlConnection(connectionString))
+            {
+                NpgsqlTransaction transaction = null;
+                try
+                {
+                    conn.Open();
+                    transaction = conn.BeginTransaction();
+
+                    string customerSql = "INSERT INTO \"Customer\" (customer_id, full_name, store_id, customer_type) " +
+                                         "VALUES (@id, @name, @store, @type)";
+
+                    using (NpgsqlCommand cmd = new NpgsqlCommand(customerSql, conn, transaction))
+                    {
+                        cmd.Parameters.AddWithValue("@id", customerId);
+                        cmd.Parameters.AddWithValue("@name", fullName);
+                        cmd.Parameters.AddWithValue("@store", storeId);
+                        cmd.Parameters.AddWithValue("@type", customerType);
+                        cmd.ExecuteNonQuery();
+                    }
+
+                    string subTypeSql = "";
+                    string message = "";
+
+                    switch (customerType)
+                    {
+                        case "Normal":
+                            subTypeSql = "INSERT INTO \"Normal_Customer\" (customer_id) VALUES (@id)";
+                            message = "Normal Müşteri";
+                            break;
+                        case "Gold":
+                            subTypeSql = "INSERT INTO \"Gold_Customer\" (customer_id) VALUES (@id)";
+                            message = "Gold Müşteri";
+                            break;
+                        case "Platinum":
+                            subTypeSql = "INSERT INTO \"Platinum_Customer\" (customer_id) VALUES (@id)";
+                            message = "Platinum Müşteri";
+                            break;
+                        default:
+                            throw new Exception("Geçersiz müşteri tipi seçildi.");
+                    }
+
+                    using (NpgsqlCommand subTypeCmd = new NpgsqlCommand(subTypeSql, conn, transaction))
+                    {
+                        subTypeCmd.Parameters.AddWithValue("@id", customerId);
+                        subTypeCmd.ExecuteNonQuery();
+                    }
+
+                    transaction.Commit();
+                    MessageBox.Show($"{message} başarıyla eklendi.", "Başarılı");
+                    LoadCustomersToGrid();
+                }
+                catch (Exception ex)
+                {
+                    if (transaction != null)
+                    {
+                        transaction.Rollback();
+                    }
+                    MessageBox.Show("Müşteri Ekleme Hatası (İşlem Geri Alındı): " + ex.Message, "Hata");
+                }
+            }
+        }
+        private void btnCustomerUpdate_Click(object sender, EventArgs e)
+        {
+            if (!int.TryParse(txtCustomerId.Text, out int customerId) ||
+                !short.TryParse(txtCustomerStoreId.Text, out short storeId))
+            {
+                MessageBox.Show("Lütfen geçerli sayısal değerler giriniz.", "Giriş Hatası");
+                return;
+            }
+
+            string fullName = txtCustomerName.Text;
+            string customerType = cmbCustomerType.SelectedItem.ToString(); 
+
+            using (NpgsqlConnection conn = new NpgsqlConnection(connectionString))
+            {
+                NpgsqlTransaction transaction = null;
+                try
+                {
+                    conn.Open();
+                    transaction = conn.BeginTransaction();
+  
+                    string sql = "UPDATE \"Customer\" SET full_name = @name, store_id = @store, customer_type = @type WHERE customer_id = @id";
+
+                    using (NpgsqlCommand cmd = new NpgsqlCommand(sql, conn, transaction))
+                    {
+                        cmd.Parameters.AddWithValue("@id", customerId);
+                        cmd.Parameters.AddWithValue("@name", fullName);
+                        cmd.Parameters.AddWithValue("@store", storeId);
+                        cmd.Parameters.AddWithValue("@type", customerType);
+
+                        int affectedRows = cmd.ExecuteNonQuery();
+
+                        if (affectedRows > 0)
+                        {
+                            transaction.Commit();
+                            MessageBox.Show("Müşteri temel bilgileri başarıyla güncellendi.", "Başarılı");
+                            LoadCustomersToGrid();
+                        }
+                        else
+                        {
+                            transaction.Rollback();
+                            MessageBox.Show("Güncellenecek müşteri bulunamadı.", "Uyarı");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (transaction != null) transaction.Rollback();
+                    MessageBox.Show("Güncelleme Hatası: " + ex.Message, "Hata");
+                }
+            }
+        }
+        private void btnCustomerDelete_Click(object sender, EventArgs e)
+        {
+            if (!int.TryParse(txtCustomerId.Text, out int customerId))
+            {
+                MessageBox.Show("Lütfen silinecek müşterinin ID'sini giriniz.", "Giriş Hatası");
+                return;
+            }
+
+            DialogResult result = MessageBox.Show($"Müşteri ID {customerId} silinsin mi? (FK kısıtlamalarına dikkat edin)", "Onay", MessageBoxButtons.YesNo);
+
+            if (result == DialogResult.Yes)
+            {
+                using (NpgsqlConnection conn = new NpgsqlConnection(connectionString))
+                {
+                    try
+                    {
+                        conn.Open();
+                        string sql = "DELETE FROM \"Customer\" WHERE customer_id = @id";
+
+                        using (NpgsqlCommand cmd = new NpgsqlCommand(sql, conn))
+                        {
+                            cmd.Parameters.AddWithValue("@id", customerId);
+
+                            int affectedRows = cmd.ExecuteNonQuery();
+
+                            if (affectedRows > 0)
+                            {
+                                MessageBox.Show("Müşteri başarıyla silindi.", "Başarılı");
+                                LoadCustomersToGrid();
+                            }
+                            else
+                            {
+                                MessageBox.Show("Silinecek müşteri bulunamadı.", "Uyarı");
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show("Silme Hatası: Müşteri bir işlemde kullanılıyor olabilir. Detay: " + ex.Message, "Hata");
+                    }
+                }
+            }
+        }
+
+        private void LoadInventoryToGrid()
+        {
+            DataTable dt = new DataTable();
+
+            using (NpgsqlConnection conn = new NpgsqlConnection(connectionString))
+            {
+                try
+                {
+                    conn.Open();
+                    string sql = "SELECT inventory_id, film_id, store_id FROM \"Inventory\" ORDER BY inventory_id;";
+
+                    using (NpgsqlDataAdapter da = new NpgsqlDataAdapter(sql, conn))
+                    {
+                        da.Fill(dt);
+                    }
+                    dataGridViewInventory.DataSource = dt;
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Envanter Listeleme Hatası: " + ex.Message, "Hata");
+                }
+            }
+        }
+
+        private void btnInventoryList_Click(object sender, EventArgs e)
+        {
+            LoadInventoryToGrid();
+        }
+
+        private void btnInventoryInsert_Click(object sender, EventArgs e)
+        {
+            if (!int.TryParse(txtInventoryId.Text, out int inventoryId) ||
+        !int.TryParse(txtInventoryFilmId.Text, out int filmId) ||
+        !short.TryParse(txtInventoryStoreId.Text, out short storeId))
+            {
+                MessageBox.Show("Lütfen tüm alanlara geçerli sayısal değerler giriniz.", "Giriş Hatası");
+                return;
+            }
+
+            using (NpgsqlConnection conn = new NpgsqlConnection(connectionString))
+            {
+                try
+                {
+                    conn.Open();
+                    string sql = "INSERT INTO \"Inventory\" (inventory_id, film_id, store_id) VALUES (@id, @film, @store)";
+
+                    using (NpgsqlCommand cmd = new NpgsqlCommand(sql, conn))
+                    {
+                        cmd.Parameters.AddWithValue("@id", inventoryId);
+                        cmd.Parameters.AddWithValue("@film", filmId);
+                        cmd.Parameters.AddWithValue("@store", storeId);
+
+                        cmd.ExecuteNonQuery();
+                        MessageBox.Show("Envanter kaydı başarıyla eklendi.", "Başarılı");
+                        LoadInventoryToGrid();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Ekleme Hatası: Film/Mağaza ID'lerinin var olduğundan emin olun. Detay: " + ex.Message, "Hata");
+                }
+            }
+        }
+
+        private void btnInventoryUpdate_Click(object sender, EventArgs e)
+        {
+            if (!int.TryParse(txtInventoryId.Text, out int inventoryId) ||
+                !int.TryParse(txtInventoryFilmId.Text, out int filmId) ||
+                !short.TryParse(txtInventoryStoreId.Text, out short storeId))
+            {
+                MessageBox.Show("Lütfen tüm alanlara geçerli sayısal değerler giriniz.", "Giriş Hatası");
+                return;
+            }
+
+            using (NpgsqlConnection conn = new NpgsqlConnection(connectionString))
+            {
+                try
+                {
+                    conn.Open();
+                    string sql = "UPDATE \"Inventory\" SET film_id = @film, store_id = @store WHERE inventory_id = @id";
+
+                    using (NpgsqlCommand cmd = new NpgsqlCommand(sql, conn))
+                    {
+                        cmd.Parameters.AddWithValue("@id", inventoryId);
+                        cmd.Parameters.AddWithValue("@film", filmId);
+                        cmd.Parameters.AddWithValue("@store", storeId);
+
+                        int affectedRows = cmd.ExecuteNonQuery();
+
+                        if (affectedRows > 0)
+                        {
+                            MessageBox.Show("Envanter kaydı başarıyla güncellendi.", "Başarılı");
+                            LoadInventoryToGrid(); 
+                        }
+                        else
+                        {
+                            MessageBox.Show("Güncellenecek envanter kaydı bulunamadı (ID hatalı).", "Uyarı");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Güncelleme Hatası: Film ID veya Mağaza ID geçersiz. Detay: " + ex.Message, "Hata");
+                }
+            }
+        }
+        private void btnInventoryDelete_Click(object sender, EventArgs e)
+        {
+            if (!int.TryParse(txtInventoryId.Text, out int inventoryId))
+            {
+                MessageBox.Show("Lütfen silinecek envanterin ID'sini giriniz.", "Giriş Hatası");
+                return;
+            }
+
+            DialogResult result = MessageBox.Show($"Envanter ID {inventoryId} silinsin mi?", "Onay", MessageBoxButtons.YesNo);
+
+            if (result == DialogResult.Yes)
+            {
+                using (NpgsqlConnection conn = new NpgsqlConnection(connectionString))
+                {
+                    try
+                    {
+                        conn.Open();
+                        string sql = "DELETE FROM \"Inventory\" WHERE inventory_id = @id";
+
+                        using (NpgsqlCommand cmd = new NpgsqlCommand(sql, conn))
+                        {
+                            cmd.Parameters.AddWithValue("@id", inventoryId);
+
+                            int affectedRows = cmd.ExecuteNonQuery();
+
+                            if (affectedRows > 0)
+                            {
+                                MessageBox.Show("Envanter başarıyla silindi.", "Başarılı");
+                                LoadInventoryToGrid();
+                            }
+                            else
+                            {
+                                MessageBox.Show("Silinecek envanter bulunamadı.", "Uyarı");
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show("Silme Hatası: Envanter kiralanmış olabilir. Detay: " + ex.Message, "Hata");
+                    }
+                }
+            }
+        }
+    }
+}
